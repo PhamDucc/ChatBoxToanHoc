@@ -4,10 +4,8 @@ import base64
 import io
 import requests
 import re
+import random  # Đã thêm thư viện random để xáo trộn chìa khóa
 from PIL import Image
-
-# CHÌA KHÓA VÀNG CỦA ĐỨC
-OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
 
 # HÀM RADAR: Tự động lên máy chủ quét xem con AI miễn phí nào đang sống
 @st.cache_data(ttl=600) # Quét 10 phút một lần cho đỡ nặng
@@ -29,11 +27,6 @@ def get_live_free_models():
     ]
 
 def solve_math_openrouter(query, img=None):
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=OPENROUTER_API_KEY,
-    )
-    
     user_content = []
     if query:
         user_content.append({"type": "text", "text": query})
@@ -44,27 +37,39 @@ def solve_math_openrouter(query, img=None):
         base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
         user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
-    # Lấy danh sách hàng chục con AI miễn phí đang mở cửa ngay lúc này
+    # Lấy danh sách hàng chục con AI miễn phí đang mở cửa
     models_to_try = get_live_free_models()
     
-    for model_name in models_to_try:
-        try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "Bạn là giáo viên dạy Toán. Hãy giải chi tiết từng bước, sử dụng LaTeX. Trả lời hoàn toàn bằng tiếng Việt."},
-                    {"role": "user", "content": user_content}
-                ],
-            )
-            # Thành công phát là trả về luôn, kèm theo tên con AI đang vác tù và hàng tổng
-            return "Tớ xong rùi nè, hehe\n\n" + response.choices[0].message.content
-        except Exception as e:
-            # Nếu con này lỗi (ví dụ không biết đọc ảnh hoặc bị 404), câm nín bỏ qua và thử con khác
-            print(f"Con AI {model_name} ngỏm củ tỏi: {e}")
-            continue 
+    # 1. LẤY DANH SÁCH 5 CHÌA KHÓA VÀ XÁO TRỘN NGẪU NHIÊN
+    danh_sach_keys = list(st.secrets["OPENROUTER_API_KEY"])
+    random.shuffle(danh_sach_keys)
+    
+    # 2. VÒNG LẶP DỰ PHÒNG: Thử từng chìa khóa một
+    for api_key in danh_sach_keys:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+        
+        for model_name in models_to_try:
+            try:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        # Lời nguyền ép AI dùng định dạng Toán học chuẩn
+                        {"role": "system", "content": "..."},
+                        {"role": "user", "content": user_content}
+                    ],
+                )
+                # Thành công phát là trả về luôn, kèm theo câu chào
+                return "Tớ xong rùi nè, hehe\n\n" + response.choices[0].message.content
+            except Exception as e:
+                # Nếu lỗi (hết lượt hoặc nghẽn mạng), in ra log và câm nín thử tiếp
+                print(f"Lỗi với Key đuôi ...{api_key[-4:]} - Model {model_name}: {e}")
+                continue 
             
-    return "Huhu, nay tớ học động hết công suất rùi, bạn cho tớ nghỉ tới ngày mai nha."
-
+    # Nếu chạy qua cả 5 chìa khóa, quét qua cả chục con AI mà vẫn lỗi thì mới in ra câu này
+    return "Huhu, nay tớ hoạt động hết công suất rùi, bạn cho tớ nghỉ tới sáng mai nha "
 # --- GIAO DIỆN TRỢ LÝ CỦA MẸ LAN ---
 st.set_page_config(page_title="Chatbox AI cô Lan", layout="centered")
 st.header("🎓 Trợ lý Toán học của cô Lan xinh")
